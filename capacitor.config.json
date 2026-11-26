@@ -1,0 +1,8 @@
+{
+  "appId": "com.zunoro.app",
+  "appName": "ZUNORO",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

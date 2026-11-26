@@ -1,0 +1,20 @@
+{
+  "name": "zunoro-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ZUNORO web app and Android wrapper source",
+  "scripts": {
+    "android:add": "npx cap add android",
+    "android:sync": "npm run build:web && npx cap sync android",
+    "android:open": "npx cap open android",
+    "build:web": "node scripts/build-web.js"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/assets": "^3.0.5"
+  }
+}
