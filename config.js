@@ -1,3 +1,3 @@
 window.ZUNORO_CONFIG = {
-  api: "https://zunoro-api.vercel.app"
+  api: "https://zunoro-video-server.vercel.app"
 };
