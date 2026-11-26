@@ -579,4 +579,126 @@ openVideo=async function(id){
  };
  openOverlay('detail');$('detail').scrollTop=0;window.scrollTo(0,0);
 };
-</script></body></html>
+</script><script id="zunoro-youtube">
+/* ===== ZUNORO x YouTube connector =====
+   Videos are searched through your Cloudflare Worker and played in the
+   official YouTube player (YouTube logo, channel and controls stay visible). */
+const ZUNORO_API="PASTE_WORKER_URL_HERE"; /* e.g. https://zunoro-video-connector.xxxx.workers.dev  (no slash at the end) */
+(function(){
+const API=String(ZUNORO_API).replace(/\/+$/,''),READY=/^https:\/\/[^\s]+$/.test(API),CK='zunoro_yt_cache_v1',TTL=3600000;
+const yt={q:'',items:[],next:null,busy:false,msg:''};
+const CHIPS=['Movies','Web Series','Songs','Cricket','News','Comedy'];
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+function num(n){n=Number(n);if(!isFinite(n)||n<0)return null;if(n>=1e7)return (n/1e7).toFixed(1).replace('.0','')+' Cr';if(n>=1e5)return (n/1e5).toFixed(1).replace('.0','')+' L';if(n>=1e3)return (n/1e3).toFixed(1).replace('.0','')+'K';return String(n)}
+function dur(s){const m=/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(s||'');if(!m)return'';const h=+m[1]||0,mi=+m[2]||0,se=+m[3]||0;return h?h+':'+String(mi).padStart(2,'0')+':'+String(se).padStart(2,'0'):mi+':'+String(se).padStart(2,'0')}
+function ago(d){const t=Date.parse(d);if(!t)return'';const s=(Date.now()-t)/1000,u=[['year',31536000],['month',2592000],['day',86400],['hour',3600],['minute',60]];for(const[n,v]of u)if(s>=v){const k=Math.floor(s/v);return k+' '+n+(k>1?'s':'')+' ago'}return'just now'}
+function cget(k){try{const o=JSON.parse(localStorage.getItem(CK)||'{}')[k];return o&&Date.now()-o.t<TTL?o.d:null}catch(e){return null}}
+function cset(k,d){try{const o=JSON.parse(localStorage.getItem(CK)||'{}'),ks=Object.keys(o);if(ks.length>25)delete o[ks[0]];o[k]={t:Date.now(),d};localStorage.setItem(CK,JSON.stringify(o))}catch(e){}}
+async function ytSearch(q,page){
+ if(!READY)throw new Error('Server is not connected yet.');
+ const key=q.toLowerCase()+'|'+(page||'');const hit=cget(key);if(hit)return hit;
+ const r=await fetch(API+'/api/youtube/search?q='+encodeURIComponent(q)+(page?'&pageToken='+encodeURIComponent(page):''));
+ const d=await r.json().catch(()=>({}));
+ if(!r.ok){const m=(d.details||d.error||'Search failed');throw new Error(/quota/i.test(m)?'YouTube daily limit reached. Try again tomorrow.':m)}
+ const ok=(d.items||[]).filter(x=>x.videoId&&String(x.embedUrl||'').startsWith('https://www.youtube.com/embed/'));
+ const out={items:ok,next:d.nextPageToken||null};cset(key,out);return out;
+}
+/* ---------- player ---------- */
+function mkPlayer(){
+ if(document.getElementById('ytPlayer'))return;
+ const o=el('div','overlay');o.id='ytPlayer';document.body.append(o);
+}
+function closeYT(){const o=document.getElementById('ytPlayer');if(!o)return;o.classList.remove('open');o.innerHTML=''}
+window.closeYT=closeYT;
+function openYT(x){
+ mkPlayer();const o=document.getElementById('ytPlayer');o.innerHTML='';
+ const back=el('button','btn alt','← Back');back.onclick=closeYT;
+ const box=el('div');box.style.cssText='position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;margin-top:10px';
+ const f=document.createElement('iframe');
+ f.src=x.embedUrl+'?autoplay=1&playsinline=1&rel=0';
+ f.allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+ f.setAttribute('allowfullscreen','');f.referrerPolicy='strict-origin-when-cross-origin';f.title=x.title;
+ f.style.cssText='position:absolute;inset:0;width:100%;height:100%;border:0';box.append(f);
+ const h=el('h2',null,x.title);h.style.fontSize='19px';
+ const ch=el('div');ch.style.cssText='display:flex;align-items:center;gap:10px;margin:8px 0';
+ const av=el('div','av',(x.channelTitle||'Y')[0]);av.style.cssText='width:38px;height:38px;border-radius:50%;background:#ffc400;color:#17130a;font-weight:800;display:grid;place-items:center;flex:0 0 auto';
+ const cn=el('div');const cname=el('b',null,x.channelTitle||'YouTube channel');
+ const st=[num(x.views)&&num(x.views)+' views',ago(x.publishedAt)].filter(Boolean).join(' · ');
+ const cm=el('div','muted',st);cn.append(cname,cm);
+ const cid='ch:'+(x.channelTitle||'YouTube');
+ const fb=el('button','btn alt fbtn',(typeof isF==='function'&&isF(cid))?'Following':'Follow');fb.dataset.ch=cid;fb.style.marginLeft='auto';
+ fb.onclick=()=>{if(typeof toggleFollow==='function')toggleFollow(cid)};
+ ch.append(av,cn,fb);
+ const acts=el('div');acts.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin:6px 0';
+ const lk=el('button','btn alt',(num(x.likes)?'♡ '+num(x.likes):'♡ Like'));
+ const lid='yt:'+x.videoId;lk.onclick=()=>{try{toggle(state.likes,lid);save()}catch(e){}lk.textContent=(state.likes&&state.likes.includes(lid)?'♥ ':'♡ ')+(num(x.likes)||'Like')};
+ const cmb=el('button','btn alt','💬 '+(num(x.comments)||'Comments'));
+ cmb.onclick=()=>window.open(x.sourceUrl,'_blank','noopener');
+ const sh=el('button','btn alt','↗ Share');sh.onclick=()=>{const d={title:x.title,text:'Watch '+x.title,url:x.sourceUrl};if(navigator.share)navigator.share(d).catch(()=>{});else{try{navigator.clipboard.writeText(x.sourceUrl);toast('Link copied')}catch(e){alert(x.sourceUrl)}}};
+ const yb=el('a','btn alt','▶ Open on YouTube');yb.href=x.sourceUrl;yb.target='_blank';yb.rel='noopener';yb.style.textDecoration='none';
+ acts.append(lk,cmb,sh,yb);
+ const d=el('div','card',x.description||'No description.');d.style.cssText+=';white-space:pre-wrap;font-size:14px;max-height:160px;overflow:auto';
+ const note=el('div','muted','Playing from YouTube · '+(x.channelTitle||''));
+ o.append(back,box,h,ch,acts,d,note);
+ o.classList.add('open');o.scrollTop=0;
+}
+window.openYT=openYT;
+/* ---------- cards ---------- */
+function ytCard(x){
+ const c=el('div');
+ const t=el('div','thumb');t.style.cursor='pointer';
+ if(String(x.thumbnail).startsWith('https://')){const im=document.createElement('img');im.src=x.thumbnail;im.loading='lazy';im.alt='';im.style.cssText='width:100%;height:100%;object-fit:cover';t.append(im)}
+ const du=el('span','dur',dur(x.duration));if(du.textContent)t.append(du);
+ const yl=el('span',null,'▶ YouTube');yl.style.cssText='position:absolute;left:8px;top:8px;background:#000a;color:#fff;font-size:11px;font-weight:700;padding:3px 7px;border-radius:8px';t.append(yl);
+ t.onclick=()=>openYT(x);
+ const m=el('div','meta');const a=el('div','av',(x.channelTitle||'Y')[0]);
+ const b=el('div');b.style.flex='1';const tt=el('div','t',x.title);
+ const mu=el('div','muted',[x.channelTitle,num(x.views)&&num(x.views)+' views',ago(x.publishedAt)].filter(Boolean).join(' · '));
+ b.append(tt,mu);m.append(a,b);c.append(t,m);return c;
+}
+/* ---------- home block ---------- */
+function drawBlock(){
+ const home=document.getElementById('home');if(!home)return;
+ let blk=document.getElementById('ytBlock');
+ if(!blk){blk=el('section');blk.id='ytBlock';blk.style.cssText='padding:4px 12px 14px';const strip=home.querySelector('.strip');if(strip&&strip.nextSibling)home.insertBefore(blk,strip.nextSibling);else home.prepend(blk)}
+ blk.innerHTML='';
+ const hd=el('div','hh');hd.style.cssText+=';display:flex;align-items:center;gap:8px';hd.append(el('span',null,'▶ YouTube'));blk.append(hd);
+ const bar=el('div');bar.style.cssText='display:flex;gap:8px';
+ const inp=el('input','field');inp.placeholder='Search videos on YouTube';inp.value=yt.q;inp.style.margin='0';
+ const go=el('button','btn','Search');go.style.flex='0 0 auto';
+ const run=()=>{const q=inp.value.trim();if(q)runSearch(q)};
+ go.onclick=run;inp.onkeydown=e=>{if(e.key==='Enter')run()};bar.append(inp,go);blk.append(bar);
+ const chips=el('div');chips.style.cssText='display:flex;gap:8px;overflow-x:auto;padding:10px 0 4px;scrollbar-width:none';
+ CHIPS.forEach(c=>{const b=el('button','btn alt',c);b.style.cssText+=';flex:0 0 auto;padding:7px 14px';b.onclick=()=>{inp.value=c;runSearch(c)};chips.append(b)});blk.append(chips);
+ if(!READY)blk.append(el('div','muted','YouTube server is not connected yet.'));
+ if(yt.msg)blk.append(el('div','muted',yt.msg));
+ if(yt.busy)blk.append(el('div','muted','Searching…'));
+ if(yt.items.length){const g=el('div','feed');g.style.padding='10px 0 0';yt.items.forEach(x=>g.append(ytCard(x)));blk.append(g);
+  if(yt.next){const more=el('button','btn alt','Show more');more.onclick=()=>runSearch(yt.q,true);blk.append(more)}}
+}
+async function runSearch(q,more){
+ if(yt.busy)return;yt.busy=true;yt.msg='';if(!more){yt.q=q;yt.items=[];yt.next=null}drawBlock();
+ try{const r=await ytSearch(q,more?yt.next:'');yt.items=more?yt.items.concat(r.items):r.items;yt.next=r.next;if(!yt.items.length)yt.msg='No playable videos found.'}
+ catch(e){yt.msg=e.message||'Could not reach the server.'}
+ yt.busy=false;drawBlock();
+}
+const _rh=window.renderHome;
+window.renderHome=function(){_rh.apply(this,arguments);drawBlock()};
+/* ---------- search screen ---------- */
+const _rs=window.renderSearch;let tm=0;
+window.renderSearch=function(){
+ _rs.apply(this,arguments);
+ const inp=document.getElementById('searchInput'),root=document.getElementById('searchResults');if(!inp||!root||!READY)return;
+ const q=inp.value.trim();clearTimeout(tm);if(q.length<3)return;
+ tm=setTimeout(async()=>{
+  try{const r=await ytSearch(q,'');if(inp.value.trim()!==q)return;
+   root.append(Object.assign(el('div','hh','▶ YouTube'),{}));
+   const g=el('div','feed');g.style.padding='0';r.items.forEach(x=>g.append(ytCard(x)));root.append(g);
+  }catch(e){if(inp.value.trim()===q)root.append(el('div','muted',e.message))}
+ },700);
+};
+if(document.getElementById('home'))try{window.renderHome()}catch(e){}
+})();
+</script>
+
+</body></html>
