@@ -1,6 +1,0 @@
-name = "zunoro-video-connector"
-main = "src/index.js"
-compatibility_date = "2026-11-26"
-
-[vars]
-ALLOWED_ORIGIN = "https://phantom20164-dotcom.github.io"
