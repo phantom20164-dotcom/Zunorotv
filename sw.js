@@ -1,6 +1,6 @@
 'use strict';
-const CACHE='zunoro-shell-v3';
-const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
+const CACHE='zunoro-shell-v4';
+const APP_SHELL=['./','./index.html','./config.js','./auth.js','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));
 });
